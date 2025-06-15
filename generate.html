@@ -133,66 +133,88 @@
 
     checkServerStatus();
 
-    async function sendPrompt() {
-      const prompt = document.getElementById("prompt").value.trim();
-      if (!prompt) {
-        alert("Scrie un prompt!");
-        return;
-      }
+async function sendPrompt() {
+  const prompt = document.getElementById("prompt").value.trim();
+  if (!prompt) {
+    alert("Scrie un prompt!");
+    return;
+  }
 
-      const formData = new FormData();
-      formData.append("prompt", prompt);
+  const formData = new FormData();
+  formData.append("prompt", prompt);
 
-      document.getElementById("loading").style.display = "block";
-      document.getElementById("resultImage").style.display = "none";
-      document.getElementById("downloadBtn").style.display = "none";
+  document.getElementById("loading").style.display = "block";
+  document.getElementById("resultImage").style.display = "none";
+  document.getElementById("downloadBtn").style.display = "none";
 
-      try {
-        const response = await fetch("/generate", {
-          method: "POST",
-          body: formData,
-        });
+  try {
+    const response = await fetch("/generate", {
+      method: "POST",
+      body: formData,
+    });
 
-        if (!response.ok) throw new Error("Eroare de la server.");
-        const data = await response.json();
-        const imageUrl = data.url;
-        if (!imageUrl) throw new Error("Imaginea nu a fost generată corect.");
-	
-	let attempts = 0;
+    if (!response.ok) throw new Error("Eroare de la server.");
+    const data = await response.json();
+
+const imageUrl = data.url;
+const timestamp = data.timestamp;
+if (!imageUrl || !timestamp) throw new Error("Imaginea nu a fost generată corect.");
+
+let attempts = 0;
 const maxAttempts = 100;
-let imageBlob = null;
 
+// 1. Așteaptă până când statusul e `ready: true`
 while (attempts < maxAttempts) {
   try {
-    const response = await fetch(imageUrl + "?t=" + Date.now(), { cache: "no-cache" });
-    if (response.ok) {
-      console.log("✅ Imaginea este gata!");
-      imageBlob = await response.blob();
-      break;
-    } else {
-      console.log(`❌ Încercare ${attempts + 1}: status ${response.status}`);
+    const statusRes = await fetch(`/status/${timestamp}`);
+    const statusData = await statusRes.json();
+
+    if (statusData.ready === true) {
+      console.log("✅ Imaginea este confirmată ca fiind gata de server.");
+      break; // ieșim din while
     }
   } catch (error) {
-    console.warn(`⚠️ Eroare la GET:`, error);
+    console.warn(`⚠️ Eroare la verificare status:`, error);
   }
 
   attempts++;
-  await new Promise(resolve => setTimeout(resolve, 10000));
-}	
+  await new Promise(resolve => setTimeout(resolve, 3000)); // verificare la 3 sec
+}
 
-        if (!imageBlob) throw new Error("Imaginea nu s-a generat la timp.");
+if (attempts === maxAttempts) {
+  throw new Error("Imaginea nu a fost generată la timp.");
+}
 
-        const resultImage = document.getElementById("resultImage");
-        resultImage.src = URL.createObjectURL(imageBlob);
-        resultImage.style.display = "block";
-        document.getElementById("downloadBtn").style.display = "inline-block";
-      } catch (err) {
-        alert(err.message);
-        console.error(err);
-      } finally {
-        document.getElementById("loading").style.display = "none";
-      }
-    }
+    // GET efectiv la imagine + o punem în <img>
+    const finalUrl = imageUrl + "?t=" + Date.now(); // cache-busting
+    const imgRes = await fetch(finalUrl, { cache: "no-cache" });
+    if (!imgRes.ok) throw new Error("Eroare la descărcarea imaginii.");
+
+    const blob = await imgRes.blob();
+    const imageURL = URL.createObjectURL(blob);
+
+    const resultImage = document.getElementById("resultImage");
+    resultImage.src = imageURL;
+    resultImage.style.display = "block";
+
+    const downloadBtn = document.getElementById("downloadBtn");
+    downloadBtn.onclick = function () {
+      const link = document.createElement("a");
+      link.href = imageURL;
+      link.download = "imagine_generata.png";
+      link.click();
+    };
+    downloadBtn.style.display = "inline-block";
+
+  } catch (err) {
+    alert(err.message);
+    console.error(err);
+  } finally {
+    document.getElementById("loading").style.display = "none";
+  }
+}
+
+
 
     function downloadImage() {
       const image = document.getElementById("resultImage");
