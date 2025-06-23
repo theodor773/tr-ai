@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <title>TR AI Images</title>
-  <link rel="icon" type="image/x-icon" href="img/favicon.jpg">
+  <link rel="icon" type="image/x-icon" href="assets/img/favicon.jpg">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="noindex, nofollow">
   <style>
     body {
       margin: 0;
       padding: 0;
-      background: url('img/gradientai3.png') no-repeat center center fixed;
+      background: url('assets/img/gradientai3.png') no-repeat center center fixed;
       background-size: cover;
       font-family: 'Segoe UI', sans-serif;
       display: flex;
@@ -20,6 +20,7 @@
     }
 
     .container {
+      margin:auto;
       background: rgba(255, 255, 255, 0.08);
       backdrop-filter: blur(30px);
       border: 1px solid rgba(255, 255, 255, 0.3);
@@ -27,7 +28,7 @@
       box-shadow: 0 12px 48px rgba(0, 0, 0, 0.4);
       padding: 40px;
       max-width: 420px;
-      width: 90%;
+      width: 80%;
       text-align: center;
       color: #ffffff;
     }
@@ -39,7 +40,7 @@
       color: #ffffffee;
     }
 
-    textarea, button {
+    button {
       width: 100%;
       margin-top: 15px;
       padding: 14px;
@@ -53,6 +54,13 @@
       resize: none;
       background-color: rgba(121, 121, 121, 0.15);
       color: rgb(255, 255, 255);
+      width: 92%;
+      margin-top: 15px;
+      padding: 14px;
+      border: none;
+      border-radius: 14px;
+      font-size: 16px;
+      outline: none;
     }
 
     button {
@@ -125,7 +133,7 @@
       } catch (e) {
         const container = document.getElementById("mainUI");
         container.innerHTML = `
-          <h2>❌ Serverul AI este oprit</h2>
+          <h2>❌ Serverul AI este oprit ❌</h2>
           <p style="font-size: 18px;">Încearcă din nou mai târziu.</p>
         `;
       }
