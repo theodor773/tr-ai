@@ -48,6 +48,15 @@
       border-radius: 14px;
       font-size: 16px;
       outline: none;
+      background: linear-gradient(to right, #00c6ff, #0072ff);
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+      transition: transform 0.2s ease;
+    }
+
+    button:hover {
+      transform: scale(1.05);
     }
 
     textarea {
@@ -61,18 +70,6 @@
       border-radius: 14px;
       font-size: 16px;
       outline: none;
-    }
-
-    button {
-      background: linear-gradient(to right, #00c6ff, #0072ff);
-      color: white;
-      font-weight: bold;
-      cursor: pointer;
-      transition: transform 0.2s ease;
-    }
-
-    button:hover {
-      transform: scale(1.05);
     }
 
     #loading {
@@ -104,125 +101,123 @@
       background: linear-gradient(to right, #9c5bd4, #6842e3);
       display: none;
     }
+
+    #inpaintBtn {
+      margin-top: 15px;
+      background: linear-gradient(to right, #ffaa00, #ff6600);
+    }
   </style>
 </head>
 <body>
-  <div class="container" id="mainUI">
+  <div id="main-ui" class="container" style="display:none;">
     <h2>💎 AI Image Generator</h2>
     <textarea id="prompt" rows="3" placeholder="Scrie un prompt (english only)."></textarea>
     <button onclick="sendPrompt()">Generează imaginea</button>
-    <div id="queueInfo" style="margin-top:10px; color:white; display:none;"></div>
+    <button id="inpaintBtn" onclick="window.location.href='assets/inpaint.html'">Comută la Modul Inpaint (beta)</button>
     <div id="loading"></div>
     <img id="resultImage" />
     <button id="downloadBtn" onclick="downloadImage()">Descarcă Imaginea</button>
   </div>
 
+ 
+  <div id="offline-ui" class="container" style="display:none; text-align:center;">
+  <h1 style="color: #ffffff; font-size: 2em;">❌ Serverul AI este oprit</h1>
+  <p style="color: #ffffff;">Încearcă din nou mai târziu.</p>
+</div>
+
   <script>
     async function checkServerStatus() {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 1000);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 1500);
+
+  try {
+    const res = await fetch("/ping", {
+      method: "GET",
+      signal: controller.signal
+    });
+    clearTimeout(timeout);
+
+    const text = await res.text();
+    if (!text.toLowerCase().includes("pong")) throw new Error("Invalid ping");
+
+    document.getElementById("main-ui").style.display = "block";
+  } catch (e) {
+    document.getElementById("offline-ui").style.display = "block";
+  }
+}    
+
+    checkServerStatus();  
+
+    async function sendPrompt() {
+      const prompt = document.getElementById("prompt").value.trim();
+      if (!prompt) {
+        alert("Scrie un prompt!");
+        return;
+      }
+
+      document.getElementById("loading").style.display = "block";
+      document.getElementById("resultImage").style.display = "none";
+      document.getElementById("downloadBtn").style.display = "none";
 
       try {
-        const res = await fetch("/ping", {
-          method: "GET",
-          signal: controller.signal
+        const response = await fetch("/v1/generation/text-to-image", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            prompt: prompt,
+	    negative_prompt: "unrealistic, saturated, high contrast, big nose, painting, drawing, sketch, cartoon, anime, manga, render, CG, 3d, watermark, signature, label, facial imperfections, deformed face",
+	    base_model_name: "realisticStockPhoto_v20.safetensors",
+            performance_selection: "Lightning",
+	    guidance_scale: 5.5,
+            aspect_ratios_selection: "1024*1024",
+            async_process: false,
+	    loras: [
+     		 {
+			lora:"SDXL_FILM_PHOTOGRAPHY_STYLE_V1.safetensors", 
+			weight: 0.5,
+			model_name: "SDXL",
+    			enabled: true
+		}
+    		]
+          })
         });
-        clearTimeout(timeout);
-        const txt = await res.text();
-        if (!(res.ok && txt.trim() === "pong")) throw new Error();
-      } catch (e) {
-        const container = document.getElementById("mainUI");
-        container.innerHTML = `
-          <h2>❌ Serverul AI este oprit ❌</h2>
-          <p style="font-size: 18px;">Încearcă din nou mai târziu.</p>
-        `;
+
+        if (!response.ok) throw new Error("Eroare de la server.");
+        const data = await response.json();
+	console.log("[RESPONSE]", data);
+
+
+        let imageUrl = Array.isArray(data) && data[0]?.url;
+	if (imageUrl?.startsWith("http://192.168.")) {
+  	const relativePath = imageUrl.split("/files/")[1];
+  	imageUrl = "/files/" + relativePath;
+	}
+
+	if (!imageUrl) throw new Error("Nu s-a generat nicio imagine.");
+
+
+        const resultImage = document.getElementById("resultImage");
+        resultImage.src = imageUrl;
+        resultImage.style.display = "block";
+
+        const downloadBtn = document.getElementById("downloadBtn");
+        downloadBtn.onclick = function () {
+          const link = document.createElement("a");
+          link.href = imageUrl;
+          link.download = "imagine_generata.png";
+          link.click();
+        };
+        downloadBtn.style.display = "inline-block";
+
+      } catch (err) {
+        alert(err.message);
+        console.error(err);
+      } finally {
+        document.getElementById("loading").style.display = "none";
       }
     }
-
-    checkServerStatus();
-
-async function sendPrompt() {
-  const prompt = document.getElementById("prompt").value.trim();
-  if (!prompt) {
-    alert("Scrie un prompt!");
-    return;
-  }
-
-  const formData = new FormData();
-  formData.append("prompt", prompt);
-
-  document.getElementById("loading").style.display = "block";
-  document.getElementById("resultImage").style.display = "none";
-  document.getElementById("downloadBtn").style.display = "none";
-
-  try {
-    const response = await fetch("/generate", {
-      method: "POST",
-      body: formData,
-    });
-
-    if (!response.ok) throw new Error("Eroare de la server.");
-    const data = await response.json();
-
-const imageUrl = data.url;
-const timestamp = data.timestamp;
-if (!imageUrl || !timestamp) throw new Error("Imaginea nu a fost generată corect.");
-
-let attempts = 0;
-const maxAttempts = 100;
-
-// 1. Așteaptă până când statusul e `ready: true`
-while (attempts < maxAttempts) {
-  try {
-    const statusRes = await fetch(`/status/${timestamp}`);
-    const statusData = await statusRes.json();
-
-    if (statusData.ready === true) {
-      console.log("✅ Imaginea este confirmată ca fiind gata de server.");
-      break; // ieșim din while
-    }
-  } catch (error) {
-    console.warn(`⚠️ Eroare la verificare status:`, error);
-  }
-
-  attempts++;
-  await new Promise(resolve => setTimeout(resolve, 3000)); // verificare la 3 sec
-}
-
-if (attempts === maxAttempts) {
-  throw new Error("Imaginea nu a fost generată la timp.");
-}
-
-    // GET efectiv la imagine + o punem în <img>
-    const finalUrl = imageUrl + "?t=" + Date.now(); // cache-busting
-    const imgRes = await fetch(finalUrl, { cache: "no-cache" });
-    if (!imgRes.ok) throw new Error("Eroare la descărcarea imaginii.");
-
-    const blob = await imgRes.blob();
-    const imageURL = URL.createObjectURL(blob);
-
-    const resultImage = document.getElementById("resultImage");
-    resultImage.src = imageURL;
-    resultImage.style.display = "block";
-
-    const downloadBtn = document.getElementById("downloadBtn");
-    downloadBtn.onclick = function () {
-      const link = document.createElement("a");
-      link.href = imageURL;
-      link.download = "imagine_generata.png";
-      link.click();
-    };
-    downloadBtn.style.display = "inline-block";
-
-  } catch (err) {
-    alert(err.message);
-    console.error(err);
-  } finally {
-    document.getElementById("loading").style.display = "none";
-  }
-}
-
-
 
     function downloadImage() {
       const image = document.getElementById("resultImage");

@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>TR AI Inpaint</title>
+  <link rel="icon" type="image/x-icon" href="img/favicon.jpg">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: url('img/gradientai3.png') no-repeat center center fixed;
+      background-size: cover;
+      font-family: 'Segoe UI', sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+    }
+    .container {
+      background: rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(30px);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      border-radius: 25px;
+      box-shadow: 0 12px 48px rgba(0, 0, 0, 0.4);
+      padding: 30px;
+      max-width: 520px;
+      width: 90%;
+      text-align: center;
+      color: #ffffff;
+    }
+    h2 {
+      margin-top: 0;
+    }
+    canvas {
+      border: 2px solid white;
+      margin-top: 10px;
+      border-radius: 12px;
+      max-width: 100%;
+      touch-action: none;
+    }
+    textarea {
+      resize: none;
+      background-color: rgba(121, 121, 121, 0.15);
+      color: rgb(255, 255, 255);
+      width: 92%;
+      margin-top: 15px;
+      padding: 14px;
+      border: none;
+      border-radius: 14px;
+      font-size: 16px;
+      outline: none;
+    }
+    button {
+      width: 100%;
+      margin-top: 15px;
+      padding: 14px;
+      border: none;
+      border-radius: 14px;
+      font-size: 16px;
+      font-weight: bold;
+      background: linear-gradient(to right, #ffaa00, #ff6600);
+      color: white;
+      cursor: pointer;
+    }
+    #resultImage {
+      margin-top: 20px;
+      border-radius: 12px;
+      width: 100%;
+      display: none;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    }
+    #downloadBtn {
+      display: none;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>🖌️ Inpaint Generator</h2>
+    <input type="file" id="imageUpload" accept="image/*">
+    <canvas id="canvas"></canvas>
+    <textarea id="prompt" rows="3" placeholder="Scrie un prompt pentru zona selectată."></textarea>
+    <button onclick="sendInpaint()">Generează imaginea</button>
+    <button onclick="window.location.href='/'">🔙 Înapoi la generare</button>
+    <img id="resultImage" />
+    <a id="downloadBtn" download="result.png"><button>⬇️ Descarcă imaginea</button></a>
+  </div>
+
+  <script>
+  const canvas = document.getElementById("canvas");
+  const ctx = canvas.getContext("2d");
+  const maskCanvas = document.createElement("canvas");
+  const maskCtx = maskCanvas.getContext("2d");
+  let drawing = false;
+  const image = new Image();
+
+  image.onload = () => {
+    canvas.width = image.width;
+    canvas.height = image.height;
+    maskCanvas.width = image.width;
+    maskCanvas.height = image.height;
+    ctx.drawImage(image, 0, 0);
+    maskCtx.fillStyle = "black";
+    maskCtx.fillRect(0, 0, image.width, image.height);
+  };
+
+  document.getElementById("imageUpload").addEventListener("change", function(e) {
+    const reader = new FileReader();
+    reader.onload = function(evt) {
+      image.src = evt.target.result;
+    };
+    reader.readAsDataURL(e.target.files[0]);
+  });
+
+  function getMousePos(canvas, evt) {
+    const rect = canvas.getBoundingClientRect();
+    const clientX = evt.touches ? evt.touches[0].clientX : evt.clientX;
+    const clientY = evt.touches ? evt.touches[0].clientY : evt.clientY;
+    return {
+      x: (clientX - rect.left) * (canvas.width / rect.width),
+      y: (clientY - rect.top) * (canvas.height / rect.height)
+    };
+  }
+
+  canvas.addEventListener("mousedown", () => drawing = true);
+  canvas.addEventListener("mouseup", () => drawing = false);
+  canvas.addEventListener("mouseout", () => drawing = false);
+  canvas.addEventListener("mousemove", function(e) {
+    if (!drawing) return;
+    const pos = getMousePos(canvas, e);
+    draw(pos);
+  });
+
+  canvas.addEventListener("touchstart", function(e) {
+    drawing = true;
+    const pos = getMousePos(canvas, e);
+    draw(pos);
+    e.preventDefault();
+  });
+
+  canvas.addEventListener("touchmove", function(e) {
+    if (!drawing) return;
+    const pos = getMousePos(canvas, e);
+    draw(pos);
+    e.preventDefault();
+  });
+
+  canvas.addEventListener("touchend", () => drawing = false);
+
+  function draw(pos) {
+    ctx.beginPath();
+    ctx.arc(pos.x, pos.y, 60, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(255, 0, 0, 1)";
+    ctx.fill();
+
+    maskCtx.beginPath();
+    maskCtx.arc(pos.x, pos.y, 60, 0, Math.PI * 2);
+    maskCtx.fillStyle = "white";
+    maskCtx.fill();
+  }
+
+  async function getBlobFromCanvas(canvas) {
+    return new Promise((resolve) => {
+      canvas.toBlob((blob) => resolve(blob), "image/png");
+    });
+  }
+
+  async function sendInpaint() {
+    const prompt = document.getElementById("prompt").value;
+    const imageBlob = await getBlobFromCanvas(canvas);
+    const maskBlob = await getBlobFromCanvas(maskCanvas);
+
+    const formData = new FormData();
+    formData.append("prompt", prompt);
+    formData.append("negative_prompt" , "unrealistic, saturated, high contrast, big nose, painting, drawing, sketch, cartoon, anime, manga, render, CG, 3d, watermark, signature, label, facial imperfections, deformed face");
+    formData.append("inpaint_additional_prompt", prompt);
+    formData.append("input_image", imageBlob, "input_image.png");
+    formData.append("input_mask", maskBlob, "input_mask.png");
+    formData.append("style_selections", JSON.stringify(["Fooocus V2", "Fooocus Enhance", "Fooocus Sharp"]));
+    formData.append("performance_selection", "Quality");
+    formData.append("aspect_ratios_selection", "1024*1024");
+    formData.append("image_number", "1");
+    formData.append("image_seed", "-1");
+    formData.append("sharpness", "2");
+    formData.append("guidance_scale", "5.5");
+    formData.append("base_model_name", "realismEngineSDXL_v30VAE.safetensors");
+    formData.append("loras", JSON.stringify([
+      {
+    lora: "SDXL_FILM_PHOTOGRAPHY_STYLE_V1.safetensors",
+    weight: 0.5,
+    model_name: "SD15",
+    enabled: true
+  }
+
+    ]));
+    formData.append("advanced_params", JSON.stringify({
+      inpaint_engine: "v2.6",
+      inpaint_advanced_masking_checkbox: true,
+      inpaint_strength: 1,
+      inpaint_disable_initial_latent: false,
+      sampler_name: "dpmpp_2m_sde_gpu",
+      scheduler_name: "karras",
+      clip_skip: 2,
+      adaptive_cfg: 7
+    }));
+    formData.append("save_meta", "true");
+    formData.append("meta_scheme", "fooocus");
+    formData.append("save_extension", "png");
+    formData.append("require_base64", "false");
+    formData.append("async_process", "false");
+    
+
+    try {
+      const res = await fetch("/v1/generation/image-inpaint-outpaint", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await res.json();
+      let imageUrl = Array.isArray(data) && data[0]?.url;
+
+      if (imageUrl?.startsWith("http://192.168.")) {
+        const relativePath = imageUrl.split("/files/")[1];
+        imageUrl = "/files/" + relativePath;
+      }
+
+      if (!imageUrl) throw new Error("Nu s-a generat nicio imagine.");
+
+      const resultImage = document.getElementById("resultImage");
+      resultImage.src = imageUrl;
+      resultImage.style.display = "block";
+
+      const downloadBtn = document.getElementById("downloadBtn");
+      downloadBtn.style.display = "inline-block";
+      downloadBtn.onclick = function () {
+        const link = document.createElement("a");
+        link.href = imageUrl;
+        link.download = "inpaint_result.png";
+        link.click();
+      };
+
+    } catch (error) {
+      alert(error.message);
+      console.error(error);
+    }
+  }
+  </script>
+</body>
+</html>
